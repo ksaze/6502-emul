@@ -1,87 +1,71 @@
-const CARRY_FLAG_POS: u8 = 0;
-const ZERO_FLAG_POS: u8 = 1;
-const IRQ_DISABLE_FLAG_POS: u8 = 2;
-const DECIMAL_FLAG_POS: u8 = 3;
-const BREAK_FLAG_POS: u8 = 4;
-const OVERFLOW_FLAG_POS: u8 = 6;
-const NEGATIVE_FLAG_POS: u8 = 7;
+use crate::operations::{Instruction, NOP_INSTR};
+use crate::shared::*;
 
-struct FlagsRegister {
-    carry: bool,
-    zero: bool,
-    irq_disable: bool,
-    decimal: bool,
-    brk: bool,
-    overflow: bool,
-    negative: bool,
-}
+pub struct StackPointer(pub Byte);
 
-impl std::convert::From<FlagsRegister> for u8 {
-    fn from(flag: FlagsRegister) -> u8 {
-        (if flag.carry { 1 } else { 0 }) << CARRY_FLAG_POS
-            | (if flag.zero { 1 } else { 0 }) << ZERO_FLAG_POS
-            | (if flag.irq_disable { 1 } else { 0 }) << IRQ_DISABLE_FLAG_POS
-            | (if flag.decimal { 1 } else { 0 }) << DECIMAL_FLAG_POS
-            | (if flag.brk { 1 } else { 0 }) << BREAK_FLAG_POS
-            | (if flag.overflow { 1 } else { 0 }) << OVERFLOW_FLAG_POS
-            | (if flag.negative { 1 } else { 0 }) << NEGATIVE_FLAG_POS
+impl StackPointer {
+    #[must_use]
+    pub const fn to_word(&self) -> Word {
+        let sp_value = self.0;
+        Word::from_le_bytes([sp_value, 0x01])
     }
-}
 
-impl std::convert::From<u8> for FlagsRegister {
-    fn from(byte: u8) -> Self {
-        let carry = ((byte >> CARRY_FLAG_POS) & 0b1) != 0;
-        let zero = ((byte >> ZERO_FLAG_POS) & 0b1) != 0;
-        let irq_disable = ((byte >> IRQ_DISABLE_FLAG_POS) & 0b1) != 0;
-        let decimal = ((byte >> DECIMAL_FLAG_POS) & 0b1) != 0;
-        let brk = ((byte >> BREAK_FLAG_POS) & 0b1) != 0;
-        let overflow = ((byte >> OVERFLOW_FLAG_POS) & 0b1) != 0;
-        let negative = ((byte >> NEGATIVE_FLAG_POS) & 0b1) != 0;
+    pub const fn decrement(&mut self) {
+        self.0 = self.0.wrapping_sub(1);
+    }
 
-        FlagsRegister {
-            carry,
-            zero,
-            irq_disable,
-            decimal,
-            brk,
-            overflow,
-            negative,
-        }
+    pub const fn increment(&mut self) {
+        self.0 = self.0.wrapping_add(1);
     }
 }
 
 pub struct CPU {
-    pc: u16,
-    sp: u8,
+    pub pc: Word,
+    pub sp: StackPointer,
 
-    a: u8,
-    x: u8,
-    y: u8,
-    flags: u8,
+    a: Byte,
+    x: Byte,
+    y: Byte,
+    pub flags: Byte,
 
-    memory: [u8; 0x10000],
+    pub ir: Byte,
+    pub tmp8: Byte,
+    pub tmp16: Word,
+    pub eff: Word,
+    pub crossed: bool,
+
+    pub instr: &'static Instruction,
+    pub step: usize,
+    pub ready: bool,
 }
 
 impl CPU {
     pub fn new() -> Self {
         CPU {
-            pc: 0xFFFC,
-            sp: 0xFF,
+            pc: 0,
+            sp: StackPointer(0),
             a: 0,
             x: 0,
             y: 0,
-            flags: 1 << IRQ_DISABLE_FLAG_POS,
-            memory: [0; 0x10000],
+            flags: (1 << IRQ_DISABLE_FLAG_POS) | (1 << UNUSED_BIT_POS),
+
+            ir: 0,
+            tmp8: 0,
+            tmp16: 0,
+            eff: 0,
+            crossed: false,
+
+            instr: &NOP_INSTR,
+            step: 0,
+            ready: true,
         }
     }
 
-    pub fn reset_cpu(&mut self) {
-        self.a = 0;
-        self.x = 0;
-        self.y = 0;
-        self.sp = 0xFF;
-        self.pc = 0xFFFC;
-        self.flags = 1 << IRQ_DISABLE_FLAG_POS;
-        self.memory.fill(0);
+    pub fn set_flag_bit(&mut self, pos: u8) {
+        self.flags |= 1 << pos;
+    }
+
+    pub fn clear_flag_bit(&mut self, pos: u8) {
+        self.flags &= 1 << pos;
     }
 }

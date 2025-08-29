@@ -1,7 +1,14 @@
+#![allow(dead_code)]
+
+mod bus;
 mod cpu;
+mod emulator;
+mod operations;
+mod shared;
 
 fn main() {
-    let mut cpu = cpu::CPU::new();
-    cpu.reset_cpu();
+    let mut emul = emulator::Emulator::new();
+    emul.reset_cpu();
+
     println!("Execution completed.");
 }
